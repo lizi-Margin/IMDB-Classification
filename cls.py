@@ -32,7 +32,7 @@ def bert_classifier(X_train, X_test, y_train, y_test):
     # 数据集compat
     train_dataset = BertDataset(X_train["input_ids"], X_train["attention_mask"], torch.tensor(y_train))
     test_dataset = BertDataset(X_test["input_ids"], X_test["attention_mask"], torch.tensor(y_test))
-    test_dataset.length = test_dataset.length // 10  # 可选：减少测试集大小
+    test_dataset.length = test_dataset.length // 10 
 
     # 模型路径
     os.makedirs(logdir, exist_ok=True)
@@ -52,7 +52,7 @@ def bert_classifier(X_train, X_test, y_train, y_test):
 
     # 参数
     training_args = TrainingArguments(
-        max_steps=300, 
+        max_steps=1000, 
         per_device_train_batch_size=16,
         warmup_steps=100,
         per_device_eval_batch_size=TESTBATCH,
