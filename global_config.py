@@ -1,3 +1,6 @@
+"""
+    by shc 2025.5.3
+"""
 class GlobalConfig:
     device = "cuda:0"
     half = False
@@ -13,8 +16,8 @@ class GlobalConfig:
     # emb_method = "bert"
     
     # 分类方法
-    cls_method = "rf"
-    # cls_method = "knn"
+    # cls_method = "rf"
+    cls_method = "knn"
     # cls_method = "bert"
     cls_ldcpt = False
     

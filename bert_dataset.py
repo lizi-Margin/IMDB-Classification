@@ -1,3 +1,6 @@
+"""
+    by shc 2025.5.3
+"""
 from torch.utils.data import Dataset
 class BertDataset(Dataset):
     def __init__(self, input_ids, attention_mask, labels):

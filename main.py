@@ -1,3 +1,6 @@
+"""
+    by shc 2025.5.3
+"""
 import numpy as np
 from database_wrapper import get_IMDB
 from cls import classify
