@@ -4,9 +4,13 @@
 import os
 import signal
 import pickle
+import shutil
 import numpy as np
 from UTIL.colorful import print_blue, print_green, print_yellow
 from global_config import GlobalConfig as cfg
+from sklearn.metrics import accuracy_score
+
+logdir = cfg.taskdir
 
 def bert_classifier(X_train, X_test, y_train, y_test):
     TESTBATCH = 128
@@ -31,7 +35,8 @@ def bert_classifier(X_train, X_test, y_train, y_test):
     test_dataset.length = test_dataset.length // 10  # 可选：减少测试集大小
 
     # 模型路径
-    model_path = f"{cfg.logdir}/{cfg.emb_method}-{cfg.cls_method}"
+    os.makedirs(logdir, exist_ok=True)
+    model_path = f"{logdir}/model"
 
     if cfg.cls_ldcpt:
         try:
@@ -111,14 +116,105 @@ def bert_classifier(X_train, X_test, y_train, y_test):
     return results
     
 
+def lstm_classifier(X_train, X_test, y_train, y_test):
+    print_blue("正在使用 LSTM 进行分类...")
+    if cfg.emb_method != "seqword2vec":
+        raise ValueError(f"不支持的嵌入方法: {cfg.emb_method}")
 
+    X_train = X_train
+    X_test = X_test
+
+    import torch
+    import torch.nn as nn
+    from torch.utils.data import TensorDataset, DataLoader
+    from lstm import LSTMModel, train_model, pad_sequences
+    
+    # 参数设置
+    # VOCAB_SIZE = len(word_to_idx) + 1  # +1 for padding (0)
+    EMBEDDING_DIM = cfg.word2vec_emb_dim
+    HIDDEN_DIM = 128
+    BATCH_SIZE = 32
+    TEST_BATCH_SIZE = 128
+    EPOCHS = 100
+    LR = 0.01
+    os.makedirs(logdir, exist_ok=True)
+    model_path = f"{logdir}/model.pt"
+    rec_des = f"{logdir}/rec.jpg"
+    rec_src = "./VISUALIZE_logdir/rec.jpg"
+    
+
+    # 确定最大序列长度
+    max_seq_len = max(len(seq) for seq in X_train)
+    min_seq_len = min(len(seq) for seq in X_train)
+    print(f"最大序列长度: {max_seq_len}, 最小序列长度: {min_seq_len}")
+    # X_train_pad = pad_sequences(X_train, maxlen=max_seq_len)
+    # X_test_pad = pad_sequences(X_test, maxlen=max_seq_len)
+    
+    # 转换为Tensor
+    train_data = TensorDataset(torch.Tensor(X_train).float(), torch.Tensor(y_train))
+    test_data = TensorDataset(torch.Tensor(X_test).float(), torch.Tensor(y_test))
+    
+    train_loader = DataLoader(train_data, batch_size=BATCH_SIZE, shuffle=True)
+    test_loader = DataLoader(test_data, batch_size=TEST_BATCH_SIZE, shuffle=False)
+    
+    model = LSTMModel(EMBEDDING_DIM, HIDDEN_DIM, num_layers=1, num_classes=2).to(cfg.device)
+    
+    
+    # 加载checkpoint
+    if cfg.cls_ldcpt and os.path.exists(model_path):
+        try:
+            model.load_state_dict(torch.load(model_path))
+            print_yellow("加载checkpoint成功")
+        except Exception as e:
+            print_yellow(f"加载checkpoint失败: {str(e)}")
+    
+    # 训练
+    try:
+        print_blue("开始训练 (Ctrl+C可终止)...")
+        train_model(model, train_loader, test_loader, EPOCHS, LR)
+    except KeyboardInterrupt:
+        print_yellow("\n训练被中断")
+        torch.save(model.state_dict(), model_path)
+        if os.path.exists(rec_src):
+            shutil.copy(rec_src, rec_des)
+        print_green("模型已保存。")
+    else:
+        print_green("训练完成")
+        torch.save(model.state_dict(), model_path)
+        if os.path.exists(rec_src):
+            shutil.copy(rec_src, rec_des)
+        print_green("模型已保存。")
+    
+    # 测试
+    print_blue("正在测试模型...")
+    model.eval()
+    y_pred = []
+    y_proba = []
+    
+    with torch.no_grad():
+        for data, target in test_loader:
+            data = data.to(cfg.device)
+            outputs = model(data)
+            probabilities = torch.softmax(outputs, dim=1)
+            y_proba.extend(probabilities[:, 1].cpu().numpy().tolist())
+            y_pred.extend(torch.argmax(outputs, dim=1).cpu().numpy().tolist())
+    
+    accuracy = accuracy_score(y_test, y_pred)
+    print_green(f"LSTM 分类完成，准确率: {accuracy:.4f}")
+    
+    return {
+        'y_pred': y_pred,
+        'y_proba': y_proba,
+        'y_test': y_test,
+        'accuracy': accuracy
+    }
 
 def random_forest_classifier(X_train, X_test, y_train, y_test):
     print_blue("正在使用 RandomForest 进行分类...")
     from sklearn.ensemble import RandomForestClassifier
-    from sklearn.metrics import accuracy_score
 
-    model_path = f"{cfg.logdir}/{cfg.emb_method}-{cfg.cls_method}.pkl"
+    os.makedirs(logdir, exist_ok=True)
+    model_path = f"{logdir}/model.pkl"
     
     if cfg.cls_ldcpt:
         try:
@@ -155,9 +251,9 @@ def random_forest_classifier(X_train, X_test, y_train, y_test):
 def knn_classifier(X_train, X_test, y_train, y_test):
     print_blue("正在使用 KNN 进行分类...")
     from sklearn.neighbors import KNeighborsClassifier
-    from sklearn.metrics import accuracy_score
     
-    model_path = f"{cfg.logdir}/{cfg.emb_method}-{cfg.cls_method}.pkl"
+    os.makedirs(logdir, exist_ok=True)
+    model_path = f"{logdir}/model.pkl"
     
     if cfg.cls_ldcpt:
         try:
@@ -198,5 +294,7 @@ def classify(X_train, X_test, y_train, y_test):
         return knn_classifier(X_train, X_test, y_train, y_test)
     elif cfg.cls_method == "bert":
         return bert_classifier(X_train, X_test, y_train, y_test)
+    elif cfg.cls_method == "lstm":
+        return lstm_classifier(X_train, X_test, y_train, y_test)
     else:
         raise ValueError(f"不支持的分类方法: {cfg.cls_method}")

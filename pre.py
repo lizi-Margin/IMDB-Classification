@@ -81,15 +81,64 @@ def vectorize_text_word2vec(content):
     # 将文本转换为单词列表
     sentences = [text.split() for text in content]
     # 训练 Word2Vec 模型
-    model = Word2Vec(sentences, vector_size=100, window=5, min_count=1, workers=4)
+    model = Word2Vec(sentences, vector_size=cfg.word2vec_emb_dim, window=5, min_count=1, workers=4)
     # 将每个文本转换为向量
     word2vec_matrix = np.array([
-        np.mean([model.wv[word] for word in words if word in model.wv] or [np.zeros(100)], axis=0)
+        np.mean([model.wv[word] for word in words if word in model.wv] or [np.zeros(cfg.word2vec_emb_dim)], axis=0)
         for words in sentences
     ])
     print_green("Word2Vec 向量化完成。")
     return word2vec_matrix, model
 
+@pkl_cache(cfg.logdir + f"/{cfg.emb_method}_vectorizer.pkl")
+def vectorize_text_seqword2vec(content):
+    print_blue("正在进行文本向量化 (seqWord2Vec)...")
+    if cfg.cls_method != "lstm":
+        raise ValueError(f"不支持的分类方法: {cfg.cls_method}")
+    
+    sentences = [text.split() for text in content]
+    
+    
+    # if False:
+    #     from gensim.scripts.glove2word2vec import glove2word2vec
+
+    #     glove2word2vec('glove.6B.300d.txt', 'glove.6B.300d.word2vec.txt')
+    #     model = KeyedVectors.load_word2vec_format('glove.6B.300d.word2vec.txt', binary=False)
+    if cfg.word2vec_emb_dim == 300:
+        from gensim.models import KeyedVectors
+        model = KeyedVectors.load_word2vec_format('./word2vec/GoogleNews-vectors-negative300.bin', binary=True)
+        maxlen = 100
+    elif cfg.word2vec_emb_dim == 50:
+        from gensim.models import KeyedVectors
+        model = KeyedVectors.load_word2vec_format("./word2vec/glove_50d_w2v_format.txt", binary=False)
+        maxlen = 75
+        # maxlen = 150  # X
+        # maxlen = 500  # X 训练不稳定，而且很难收敛
+    else:
+        raise ValueError(f"不支持的词向量维度: {cfg.word2vec_emb_dim}")
+
+    
+    # 构建词汇表到索引的映射
+    # word_to_idx = {word: idx+1 for idx, word in enumerate(model.wv.index_to_key)}  # 0保留给padding
+    
+    # 将文本转换为单词索引序列
+    word_indices = []
+    for words in tqdm(sentences):
+        seq = []
+        for word in words:
+            if word in model:
+                seq.append((model.get_vector(word, norm=True)).astype(np.float32))
+            else:
+                seq.append(np.zeros((cfg.word2vec_emb_dim,), dtype=np.float32))
+            assert isinstance(seq[-1], np.ndarray)
+            assert len(seq[-1]) == cfg.word2vec_emb_dim
+        word_indices.append(seq)
+    from lstm import pad_sequences
+    word_indices = pad_sequences(word_indices, maxlen=maxlen, value=np.zeros(cfg.word2vec_emb_dim,))
+    
+    print_green("Word2Vec 向量化完成。")
+    # return {'word_indices':word_indices, 'word_to_idx': word_to_idx,}, model
+    return word_indices, model
 @pkl_cache(cfg.logdir + f"/{cfg.emb_method}_vectorizer.pkl")
 def vectorize_text_bert(content):
     print_blue("正在进行文本向量化 (BERT)...")
@@ -111,6 +160,8 @@ def vectorize_text(content):
         return vectorize_text_tfidf(content)
     elif cfg.emb_method == "word2vec":
         return vectorize_text_word2vec(content)
+    elif cfg.emb_method == "seqword2vec":
+        return vectorize_text_seqword2vec(content)
     elif cfg.emb_method == "bert":
         return vectorize_text_bert(content)
     else:
@@ -133,6 +184,17 @@ def split_train_test(content, label, test_size):
         X_test = content
         y_train = label
         y_test = label
+    elif cfg.emb_method == "seqword2vec":
+        # word_indices, word_to_idx = content['word_indices'], content['word_to_idx']
+        # X_train_, X_test_, y_train, y_test = train_test_split(
+        #     word_indices, label, test_size=test_size, random_state=cfg.rs
+        # )
+        # X_train = {'word_indices':X_train_, 'word_to_idx': word_to_idx}
+        # X_test = {'word_indices':X_test_, 'word_to_idx': word_to_idx}
+
+        X_train, X_test, y_train, y_test = train_test_split(
+            content, label, test_size=test_size, random_state=cfg.rs
+        )
     else:
         # 其他向量化方法
         X_train, X_test, y_train, y_test = train_test_split(

@@ -1,6 +1,7 @@
 """
     by shc 2025.5.3
 """
+import os,shutil
 import numpy as np
 from UTIL.colorful import *
 from global_config import GlobalConfig as cfg
@@ -8,6 +9,9 @@ from global_config import GlobalConfig as cfg
 def eval(result: dict, y_test):
     y_proba = result['y_proba']
     y_pred = result['y_pred']
+
+    logdir = cfg.taskdir
+    os.makedirs(logdir, exist_ok=True)
 
     from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, roc_auc_score
     accuracy = accuracy_score(y_test, y_pred)
@@ -34,7 +38,7 @@ def eval(result: dict, y_test):
     plt.ylabel('True Positive Rate')
     plt.title('Receiver Operating Characteristic')
     plt.legend(loc="lower right")
-    plt.savefig(f"{cfg.logdir}/ROC_curve.png")
+    plt.savefig(f"{logdir}/ROC_curve.png")
     plt.cla()
 
 
@@ -48,7 +52,7 @@ def eval(result: dict, y_test):
     plt.ylabel('Precision')
     plt.title('Precision-Recall curve')
     plt.legend(loc="lower left")
-    plt.savefig(f"{cfg.logdir}/Precision_Recall_curve.png")
+    plt.savefig(f"{logdir}/Precision_Recall_curve.png")
     plt.cla()
 
     # confusion matrix
@@ -63,7 +67,7 @@ def eval(result: dict, y_test):
     plt.xlabel('Predicted')
     plt.ylabel('True')
     plt.title('Confusion Matrix')
-    plt.savefig(f"{cfg.logdir}/Confusion_Matrix.png")
+    plt.savefig(f"{logdir}/Confusion_Matrix.png")
     plt.cla()
 
     metrics = {
@@ -77,13 +81,13 @@ def eval(result: dict, y_test):
         'thresholds': thresholds,
         'precision': precision,
         'recall': recall,
-        'pic_roc': f'{cfg.logdir}/ROC_curve.png',
-        'pic_pr': f'{cfg.logdir}/Precision_Recall_curve.png',
-        'pic_cm': f'{cfg.logdir}/Confusion_Matrix.png'
+        'pic_roc': f'{logdir}/ROC_curve.png',
+        'pic_pr': f'{logdir}/Precision_Recall_curve.png',
+        'pic_cm': f'{logdir}/Confusion_Matrix.png'
     }
     # dump metrics
     import json
-    with open(f"{cfg.logdir}/metrics.json", 'w') as f:
+    with open(f"{logdir}/metrics.json", 'w') as f:
         dump_metrics = {}
         for key, value in metrics.items():
             if isinstance(value, np.ndarray):

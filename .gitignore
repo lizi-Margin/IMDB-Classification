@@ -3,3 +3,7 @@
 /database
 __pycache__
 *.pyc
+/VISUALIZE_logdir
+/word2vec
+/lost+found
+/.Trash-*
