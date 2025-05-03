@@ -1,13 +1,17 @@
+import numpy as np
 from UTIL.colorful import *
 from global_config import GlobalConfig as cfg
 
 def eval(result: dict, y_test):
+    y_proba = result['y_proba']
+    y_pred = result['y_pred']
+
     from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, roc_auc_score
-    accuracy = accuracy_score(y_test, result)
-    precision = precision_score(y_test, result)
-    recall = recall_score(y_test, result)
-    f1 = f1_score(y_test, result)
-    auc = roc_auc_score(y_test, result)
+    accuracy = accuracy_score(y_test, y_pred)
+    precision = precision_score(y_test, y_pred)
+    recall = recall_score(y_test, y_pred)
+    f1 = f1_score(y_test, y_pred)
+    auc = roc_auc_score(y_test, y_proba)
     print_green("评估结果:")
     print(f"准确率: {accuracy}")
     print(f"精确率: {precision}")
@@ -18,7 +22,7 @@ def eval(result: dict, y_test):
     # ROC curve
     from sklearn.metrics import roc_curve
     import matplotlib.pyplot as plt
-    fpr, tpr, thresholds = roc_curve(y_test, result)
+    fpr, tpr, thresholds = roc_curve(y_test, y_proba)
     plt.plot(fpr, tpr, label='ROC curve (area = %0.2f)' % auc)
     plt.plot([0, 1], [0, 1], 'k--')
     plt.xlim([0.0, 1.0])
@@ -33,7 +37,7 @@ def eval(result: dict, y_test):
 
     # precision-recall curve
     from sklearn.metrics import precision_recall_curve
-    precision, recall, thresholds = precision_recall_curve(y_test, result)
+    precision, recall, thresholds = precision_recall_curve(y_test, y_proba)
     plt.plot(recall, precision, label='Precision-Recall curve')
     plt.xlim([0.0, 1.0])
     plt.ylim([0.0, 1.05])
@@ -46,7 +50,7 @@ def eval(result: dict, y_test):
 
     # confusion matrix
     from sklearn.metrics import confusion_matrix
-    cm = confusion_matrix(y_test, result)
+    cm = confusion_matrix(y_test, y_pred)
     print_yellow("混淆矩阵:")
     print(cm)
 
@@ -77,7 +81,13 @@ def eval(result: dict, y_test):
     # dump metrics
     import json
     with open(f"{cfg.logdir}/metrics.json", 'w') as f:
-        json.dump(metrics, f)
+        dump_metrics = {}
+        for key, value in metrics.items():
+            if isinstance(value, np.ndarray):
+                dump_metrics[key] = value.tolist()
+            else:
+                dump_metrics[key] = value
+        json.dump(dump_metrics, f, indent=4)
 
     result.update(metrics)
     return result

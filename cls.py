@@ -1,7 +1,11 @@
+import pickle
+import numpy as np
 from UTIL.colorful import print_blue, print_green, print_yellow
 from global_config import GlobalConfig as cfg
 
 def bert_classifier(X_train, X_test, y_train, y_test):
+    TESTBATCH = 128
+
     print_blue("正在使用 BERT 进行分类...")
     if cfg.emb_method != "bert":
         raise ValueError(f"不支持的嵌入方法: {cfg.emb_method}")
@@ -39,7 +43,7 @@ def bert_classifier(X_train, X_test, y_train, y_test):
         per_device_train_batch_size=16,  # 较小batch size
         warmup_steps=100,  
 
-        per_device_eval_batch_size=128,
+        per_device_eval_batch_size=TESTBATCH,
         
         weight_decay=0.01,
 
@@ -72,8 +76,35 @@ def bert_classifier(X_train, X_test, y_train, y_test):
     print_green("模型已保存。")
 
 
+    # results = trainer.evaluate(test_dataset)
+    results = {}
+    test_loader = DataLoader(test_dataset, batch_size=TESTBATCH, shuffle=False)
+    
+    model.eval()  # 设置为评估模式
+    y_pred = []
+    y_proba = []
+    
+    with torch.no_grad():
+        for batch in test_loader:
+            # 将数据移动到设备上
+            inputs = {
+                'input_ids': batch[0].to(cfg.device),
+                'attention_mask': batch[1].to(cfg.device)
+            }
+            
+            outputs = model(**inputs)
+            logits = outputs.logits
+            logits_t2n = logits.cpu().numpy()
+            batch_pred = torch.argmax(logits, dim=1).cpu().numpy()
+            y_pred.extend(batch_pred.tolist())
+            y_proba.extend(logits_t2n.tolist())
+    
     results = trainer.evaluate(test_dataset)
     print_green("BERT 分类完成。")
+
+    results['y_pred'] = y_pred
+    results['y_proba'] = y_proba
+    results['y_test'] = y_test
 
     return results
 
@@ -82,10 +113,13 @@ def random_forest_classifier(X_train, X_test, y_train, y_test):
     from sklearn.ensemble import RandomForestClassifier
     from sklearn.metrics import accuracy_score
 
+    model_path = f"{cfg.logdir}/{cfg.emb_method}-{cfg.cls_method}.pkl"
+    
     if cfg.cls_ldcpt:
         try:
-            # load a checkpoint from cfg.logdir
-            clf = RandomForestClassifier.load(f"{cfg.logdir}/{cfg.emb_method}-{cfg.cls_method}")
+            # 从checkpoint加载
+            with open(model_path, 'rb') as f:
+                clf = pickle.load(f)
             print_yellow("加载checkpoint成功")
         except Exception as e:
             print_yellow("加载checkpoint失败")
@@ -96,25 +130,35 @@ def random_forest_classifier(X_train, X_test, y_train, y_test):
     
     # 预测并评估
     y_pred = clf.predict(X_test)
+    y_proba = clf.predict_proba(X_test)  # 概率
+    y_proba = [p[1] for p in y_proba]  # 正类概率
     accuracy = accuracy_score(y_test, y_pred)
     print_green("RandomForest 分类完成。")
 
-    # save model
     if not cfg.cls_ldcpt:
-        clf.save(f"{cfg.logdir}/{cfg.emb_method}-{cfg.cls_method}")
+        with open(model_path, 'wb') as f:
+            pickle.dump(clf, f)
         print_green("模型已保存。")
 
-    return {'accuracy': accuracy}
+    return {
+        'y_pred': y_pred,
+        'y_proba': y_proba,
+        'y_test': y_test,
+        'accuracy': accuracy
+    }
 
 def knn_classifier(X_train, X_test, y_train, y_test):
     print_blue("正在使用 KNN 进行分类...")
     from sklearn.neighbors import KNeighborsClassifier
     from sklearn.metrics import accuracy_score
     
+    model_path = f"{cfg.logdir}/{cfg.emb_method}-{cfg.cls_method}.pkl"
+    
     if cfg.cls_ldcpt:
         try:
-            # load a checkpoint from cfg.logdir
-            clf = KNeighborsClassifier.load(f"{cfg.logdir}/{cfg.emb_method}-{cfg.cls_method}")
+            # 从checkpoint加载
+            with open(model_path, 'rb') as f:
+                clf = pickle.load(f)
             print_yellow("加载checkpoint成功")
         except Exception as e:
             print_yellow("加载checkpoint失败")
@@ -125,15 +169,22 @@ def knn_classifier(X_train, X_test, y_train, y_test):
     
     # 预测并评估
     y_pred = clf.predict(X_test)
+    y_proba = clf.predict_proba(X_test)  # 概率
+    y_proba = [p[1] for p in y_proba]  # 正类概率
     accuracy = accuracy_score(y_test, y_pred)
     print_green("KNN 分类完成。")
 
-    # save model
     if not cfg.cls_ldcpt:
-        clf.save(f"{cfg.logdir}/{cfg.emb_method}-{cfg.cls_method}")
+        with open(model_path, 'wb') as f:
+            pickle.dump(clf, f)
         print_green("模型已保存。")
 
-    return {'accuracy': accuracy}
+    return {
+        'y_pred': y_pred,
+        'y_proba': y_proba,
+        'y_test': y_test,
+        'accuracy': accuracy
+    }
 
 def classify(X_train, X_test, y_train, y_test):
     if cfg.cls_method == "rf":
