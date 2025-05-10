@@ -96,9 +96,11 @@ def bert_classifier(X_train, X_test, y_train, y_test):
     with torch.no_grad():
         for batch in test_loader:
             inputs = {
-                'input_ids': batch[0].to(cfg.device),
-                'attention_mask': batch[1].to(cfg.device)
+                "input_ids": batch["input_ids"].to(cfg.device),
+                "attention_mask": batch["attention_mask"].to(cfg.device),
+                "labels": batch["labels"].to(cfg.device),
             }
+
             outputs = model(**inputs)
             logits = outputs.logits
             batch_pred = torch.argmax(logits, dim=1).cpu().numpy()
