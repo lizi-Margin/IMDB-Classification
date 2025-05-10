@@ -9,6 +9,7 @@ from collections import Counter
 # from nltk.corpus import stopwords
 from tqdm import tqdm
 from UTIL.colorful import print_blue, print_green, print_yellow
+import matplotlib.pyplot as plt
 from global_config import GlobalConfig as cfg
 from pkl_cache import pkl_cache
 
@@ -17,31 +18,128 @@ from pkl_cache import pkl_cache
 STOPWORDS_PATH = '/home/hulc/nltk_data/' + 'corpora/stopwords' + "/english"
 
 # (一) 构建词汇表
-def build_vocabulary(content, min_freq=5):
+def vocabulary_filter(content, min_freq=5):
     print_blue("正在构建词汇表...")
     word_count = Counter()
-    for text in tqdm(content, desc="统计词频"):
-        words = text.split()
+    for words in tqdm(content, desc="统计词频"):
         word_count.update(words)
-    
+
+    cnt = 0
+    for word in word_count.most_common():
+        if word[1] < min_freq:
+            print_yellow(f"  {word[0]}: {word[1]}次")
+            cnt += 1
+    print(word_count.total())
+    print(len(word_count))
+    print(cnt)
+
     # 过滤低频词并按频率排序
     filtered_words = [word for word, freq in word_count.items() if freq >= min_freq]
     sorted_words = sorted(filtered_words, key=lambda x: word_count[x], reverse=True)
     
-    # 构建词汇表
+    
     vocab = {word: idx for idx, word in enumerate(sorted_words)}
     print_green("词汇表构建完成。")
-    return vocab
+
+    # 用词汇表过滤掉低频词
+    filtered_content = []
+    for words in tqdm(content, desc="过滤低频词"):
+        filtered_words = [word for word in words if word in vocab]
+        filtered_content.append(filtered_words)
+
+    return filtered_content
 
 # (三) 移除特殊字符
 def remove_special_characters(text):
-    clean_text = re.sub(r'[^a-zA-Z0-9\s]', '', text)
-    return clean_text
+    text = re.sub(r'<\/?[a-zA-Z][^>)]*[>)]', '', text)
+    blacklist = r'¾°ÓÅÃÀ¿¢▼₤ÄºÊÞÈ¤★，ÏÐõığÂŻ″³Ç©ªØיגאלכרמופן'  # 希伯来字母
+    text = re.sub(f'[{blacklist}]', '', text)
+    
+
+    text = re.sub(r'``', '', text)
+    return text
 
 # (四) 分词
-def tokenize(text):
-    words = text.lower().split()
-    return words
+def convert_chinese_punctuation_to_english(text):
+    # 引号类
+    text = re.sub(r'[“”]', '"', text)
+    text = re.sub(r'[‘’]', "'", text)
+    
+    # 标点类
+    text = re.sub(r'[，]', ',', text)
+    text = re.sub(r'[：]', ':', text)
+    text = re.sub(r'[；]', ';', text)
+    text = re.sub(r'[。]', '.', text)
+    text = re.sub(r'[！]', '!', text)
+    text = re.sub(r'[？]', '?', text)
+    text = re.sub(r'[（]', '(', text)
+    text = re.sub(r'[）]', ')', text)
+    text = re.sub(r'[【]', '[', text)
+    text = re.sub(r'[】]', ']', text)
+    text = re.sub(r'[、]', '/', text)
+    text = re.sub(r'[～]', '~', text)
+    
+    # 破折号/连接号
+    text = re.sub(r'[—]', '-', text)
+    
+    return text
+def preprocess_text(text):
+    # 1. 英文符号
+    text = convert_chinese_punctuation_to_english(text)
+    
+    # 2. 处理标点粘连（在标点前加空格）
+    text = re.sub(r'([.,!?():;"])', r' \1 ', text)
+    
+    # # 3. 处理缩写（防止误切分，如 "I'm" → "I ' m"）
+    # text = re.sub(r'(\w+)(n\'t|\'[smd])', r'\1 \2', text)  # 如 don't → do n't
+    
+    # 4. 移除多余空格
+    text = re.sub(r'\s+', ' ', text).strip()
+
+    # 5. 全部小写
+    text = text.lower()
+
+    return text
+
+def postprocess_tokens(tokens):
+    # # 合并专有名词（如 "New York" → "New_York"）
+    # i = 0
+    # while i < len(tokens)-1:
+    #     if tokens[i][0].isupper() and tokens[i+1][0].isupper():
+    #         tokens[i] = f"{tokens[i]}_{tokens.pop(i+1)}"
+    #     else:
+    #         i += 1
+    return tokens
+
+@pkl_cache(cfg.logdir + f"/tokenized.pkl")
+def tokenize(content):
+    tokenized_content = [tokenize_(text) for text in tqdm(content, desc="分词")]
+    return tokenized_content
+def tokenize_(text):
+    from nltk.tokenize import word_tokenize
+    text = preprocess_text(text)
+    tokens = word_tokenize(text)
+    tokens = postprocess_tokens(tokens)
+    # words = text.lower().split()
+    return tokens
+
+def count_tokens(all_rows):
+    word_counts = Counter()
+    for tokens in tqdm(all_rows, "count tokens"):
+        word_counts.update(tokens)
+    # 获取词频数据（按频率降序）
+    words, counts = zip(*word_counts.most_common())
+
+    # 绘制词频曲线
+    plt.figure(figsize=(12, 6))
+    plt.plot(range(len(words)), np.log(counts), marker="o", linestyle="-", color="b")
+    # plt.xticks(range(len(words)), words, rotation=45, ha="right")
+    plt.xlabel("Words")
+    plt.ylabel("Log Frequency")
+    plt.title("Word Frequency Distribution")
+    plt.grid(True)
+    plt.tight_layout()
+    plt.savefig(cfg.logdir + "/word_frequency_distribution_tokenized.png")
 
 # (五) 去除停用词
 def remove_stopwords(words):

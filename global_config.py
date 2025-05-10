@@ -10,19 +10,19 @@ class GlobalConfig:
     logdir = "./result/"
 
     # 嵌入方法
-    # emb_method = "tfidf"
+    emb_method = "tfidf"
     # emb_method = "bow"
     # emb_method = "word2vec"
     # emb_method = "seqword2vec"
-    emb_method = "bert"
+    # emb_method = "bert"
     # word2vec_emb_dim = 300  # 50GiB RAM Needed
     word2vec_emb_dim = 50
     
     # 分类方法
     # cls_method = "rf"
-    # cls_method = "knn"
+    cls_method = "knn"
     # cls_method = 'lstm'
-    cls_method = "bert"
+    # cls_method = "bert"
     cls_ldcpt = False
 
 

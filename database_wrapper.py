@@ -2,16 +2,11 @@
     database_wrapper.py
     by shc 2025.5.3
 """
-from pre import (
-    remove_special_characters,
-    tokenize,
-    remove_stopwords,
-    vectorize_text,
-    split_train_test,
-    build_vocabulary
-)
+import re
+from pre import *
 from tqdm import tqdm
-from UTIL.colorful import print_blue, print_green, print_yellow
+from UTIL.colorful import *
+from collections import Counter
 
 
 def print_list(lst, max_n=10):
@@ -43,16 +38,35 @@ def get_IMDB():
     # 数据预处理
     print_blue("正在进行数据预处理...")
     cleaned_content = []
-    for text in tqdm(content, desc="移除特殊字符"):
+    html_tags_counter = Counter() 
+    for text in tqdm(content, desc="移除特殊字符"): 
         cleaned_text = remove_special_characters(text)
         cleaned_content.append(cleaned_text)
+
+        # wtf = re.findall(r'[^a-zA-Z0-9\s]', cleaned_text)
+        # html_tags_counter.update(wtf)
+        tags_in_text = re.findall(r'<\/?[a-zA-Z][^>)]*[>)]', cleaned_text) 
+        html_tags_counter.update(tags_in_text)
+    for tag, count in html_tags_counter.most_common():  # 按出现次数排序
+        print红(f"  {tag}: {count}次")
     
-    tokenized_content = [tokenize(text) for text in tqdm(cleaned_content, desc="分词")]
+
+    tokenized_content = tokenize(cleaned_content)
+    # tokenized_content = [tokenize(text) for text in tqdm(cleaned_content, desc="分词")]
+    
     filtered_content = []
     for words in tqdm(tokenized_content, desc="去除停用词"):
         filtered_words = remove_stopwords(words)
-        filtered_content.append(" ".join(filtered_words))
+        filtered_content.append(filtered_words)
     print_green("数据预处理完成。")
+
+    # 词汇过滤
+    filtered_content = vocabulary_filter(filtered_content)
+    count_tokens(filtered_content)
+
+    # list to str
+    for i in range(len(filtered_content)):
+        filtered_content[i] = " ".join(filtered_content[i])
     
     # 文本向量化
     vectorized_matrix, vectorizer = vectorize_text(filtered_content)

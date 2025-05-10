@@ -2,6 +2,7 @@
     by shc 2025.5.3
 """
 import os
+import json
 import signal
 import pickle
 import shutil
@@ -267,7 +268,39 @@ def knn_classifier(X_train, X_test, y_train, y_test):
             print_yellow("加载checkpoint失败")
             raise e
     else:
-        clf = KNeighborsClassifier(n_neighbors=5, n_jobs=cfg.NJ)
+        # CV = 3
+        # from skopt import BayesSearchCV
+        # from skopt.space import Real, Integer
+        # from sklearn.metrics import make_scorer, accuracy_score
+        # clf = KNeighborsClassifier(
+        #     algorithm='auto',
+        #     n_jobs=cfg.NJ//CV
+        # )
+        # search = BayesSearchCV(
+        #     clf,
+        #     {
+        #         'n_neighbors': Integer(1, 10),
+        #         'weights': ['uniform', 'distance'],
+        #         'leaf_size': Integer(10, 50)
+        #     },
+        #     cv=CV,
+        #     n_jobs=CV,
+        #     verbose=True
+        # )
+        # search.fit(X_train, y_train)
+        # clf = search.best_estimator_
+        # print_yellow(f"最佳参数: {search.best_params_}")
+        # print_yellow(f"最佳得分: {search.best_score_}")
+        # param_path = f"{logdir}/best_params.json"
+        # with open(param_path, 'wb') as f:
+        #     json.dump(search.best_params_, f)
+
+        clf = KNeighborsClassifier(
+            algorithm='auto',
+            n_neighbors=10,
+            leaf_size=30,
+            n_jobs=cfg.NJ,
+        )
         clf.fit(X_train, y_train)
     
     # 预测并评估
